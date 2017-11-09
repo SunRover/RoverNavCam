@@ -39,16 +39,20 @@ import android.hardware.display.DisplayManager;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
 import android.os.Bundle;
+import android.os.StrictMode;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import org.rajawali3d.scene.ASceneFrameCallback;
 import org.rajawali3d.surface.RajawaliSurfaceView;
 
+import java.io.*;
+import java.net.*;
 import java.nio.FloatBuffer;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -102,6 +106,16 @@ public class PointCloudActivity extends Activity {
     private AtomicBoolean mIsFrameAvailableTangoThread = new AtomicBoolean(false);
     private double mRgbTimestampGlThread;
 
+    //networking
+    private Socket socket;
+    private static final int SERVERPORT = 567;
+    //private static final String SERVER_IP = "10.0.2.2";//"localhost";
+    private static final String SERVER_IP = "10.65.175.7"; //desktop
+//    private static final String SERVER_IP = "172.30.94.10"; //rover laptop
+    //private static final String SERVER_IP = "192.168.1.5"; home laptop
+
+    PrintWriter out;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -117,6 +131,13 @@ public class PointCloudActivity extends Activity {
         mTangoUx = setupTangoUxAndLayout();
         mRenderer = new PointCloudRajawaliRenderer(this);
         setupRenderer();
+
+        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+        StrictMode.setThreadPolicy(policy);
+
+        Log.d("debug", "starting client thread");
+
+        new Thread(new ClientThread()).start();
 
         DisplayManager displayManager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
         if (displayManager != null) {
@@ -256,12 +277,13 @@ public class PointCloudActivity extends Activity {
 
                 final String statusText;
                 final String debugText = getDebugStatus(pointCloud.points, pointCloud.numPoints);
-                if(averageDepth < 0.5){
+                if (averageDepth < 0.5) {
                     statusText = "Stop";
-                }
-                else {
+                } else {
                     statusText = getStatus(pointCloud.points, pointCloud.numPoints);
                 }
+
+                out.println(statusText);
 
                 getRawPointData(pointCloud.points, pointCloud.numPoints);
 
@@ -568,49 +590,45 @@ public class PointCloudActivity extends Activity {
         return averageZ;
     }
 
-    public String getDebugStatus(FloatBuffer pointCloudBuffer, int numPoints){
+    public String getDebugStatus(FloatBuffer pointCloudBuffer, int numPoints) {
         float totalWeight = 0;
         if (numPoints != 0) {
             int numFloats = 4 * numPoints;
             for (int i = 0; i < numFloats; i = i + 4) {
-                if(pointCloudBuffer.get(i) > 0 && pointCloudBuffer.get(i) < 0.3){
-                    totalWeight += (1/pointCloudBuffer.get(i+2));
-                }
-                else if(pointCloudBuffer.get(i) < 0 && pointCloudBuffer.get(i) > -0.3){
-                    totalWeight -= (1/pointCloudBuffer.get(i+2));
+                if (pointCloudBuffer.get(i) > 0 && pointCloudBuffer.get(i) < 0.3) {
+                    totalWeight += (1 / pointCloudBuffer.get(i + 2));
+                } else if (pointCloudBuffer.get(i) < 0 && pointCloudBuffer.get(i) > -0.3) {
+                    totalWeight -= (1 / pointCloudBuffer.get(i + 2));
                 }
             }
         }
         return Float.toString(totalWeight);
     }
 
-    public String getStatus(FloatBuffer pointCloudBuffer, int numPoints){
+    public String getStatus(FloatBuffer pointCloudBuffer, int numPoints) {
         float totalWeight = 0;
         if (numPoints != 0) {
             int numFloats = 4 * numPoints;
             for (int i = 0; i < numFloats; i = i + 4) {
-                if(pointCloudBuffer.get(i) > 0 && pointCloudBuffer.get(i) < 0.3){
-                    totalWeight += (1/pointCloudBuffer.get(i+2));
-                }
-                else if(pointCloudBuffer.get(i) < 0 && pointCloudBuffer.get(i) > -0.3){
-                    totalWeight -= (1/pointCloudBuffer.get(i+2));
+                if (pointCloudBuffer.get(i) > 0 && pointCloudBuffer.get(i) < 0.3) {
+                    totalWeight += (1 / pointCloudBuffer.get(i + 2));
+                } else if (pointCloudBuffer.get(i) < 0 && pointCloudBuffer.get(i) > -0.3) {
+                    totalWeight -= (1 / pointCloudBuffer.get(i + 2));
                 }
             }
         }
-        if(totalWeight > 100){
+        if (totalWeight > 100) {
             return "Turn Left";
-        }
-        else if(totalWeight < -100){
+        } else if (totalWeight < -100) {
             return "Turn Right";
-        }
-        else{
+        } else {
             return "Clear";
         }
     }
 
     private void getRawPointData(FloatBuffer pointCloudBuffer, int numPoints) {
         int numFloats = 4 * numPoints;
-        for (int i = 0; i < numFloats; i = i + 4){
+        for (int i = 0; i < numFloats; i = i + 4) {
             String data = "(";
             data += (pointCloudBuffer.get(i) + " " + pointCloudBuffer.get(i + 1) + " " + pointCloudBuffer.get(i + 2) + ")").toString();
             Log.d("test", data);
@@ -632,6 +650,7 @@ public class PointCloudActivity extends Activity {
     private void setDisplayRotation() {
         Display display = getWindowManager().getDefaultDisplay();
         mDisplayRotation = display.getRotation();
+
     }
 
     /**
@@ -649,4 +668,25 @@ public class PointCloudActivity extends Activity {
             }
         });
     }
+
+    class ClientThread implements Runnable {
+
+        @Override
+        public void run() {
+            try {
+                InetAddress serverAddr = InetAddress.getByName(SERVER_IP);
+                Log.d("debug", "checking for connection");
+                socket = new Socket(serverAddr, SERVERPORT);
+                //socket = new Socket(SERVER_IP, SERVERPORT);
+                Log.d("debug", socket.getInetAddress().toString());
+                out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
+
+            } catch (UnknownHostException e1) {
+                e1.printStackTrace();
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            }
+        }
+    }
 }
+
