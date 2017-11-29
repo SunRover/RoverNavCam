@@ -67,6 +67,8 @@ public class PointCloudRajawaliRenderer extends RajawaliRenderer {
     private FrustumAxes mFrustumAxes;
     private Grid mGrid;
 
+    double yaw = 0;
+
     public PointCloudRajawaliRenderer(Context context) {
         super(context);
         mTouchViewHandler = new TouchViewHandler(mContext, getCurrentCamera());
@@ -236,11 +238,18 @@ public class PointCloudRajawaliRenderer extends RajawaliRenderer {
 //        Log.d(TAG, translation[cameraPose.INDEX_TRANSLATION_X] + " " + translation[cameraPose.INDEX_TRANSLATION_Y] + " " + translation[cameraPose.INDEX_TRANSLATION_Z]);
         Quaternion quaternion = new Quaternion(rotation[3], rotation[0], rotation[1], rotation[2]);
         mFrustumAxes.setPosition(translation[0], translation[1], translation[2]);
+
+        yaw = quaternion.getYaw();
+
         // Conjugating the Quaternion is needed because Rajawali uses left-handed convention for
         // quaternions.
         mFrustumAxes.setOrientation(quaternion.conjugate());
         mTouchViewHandler.updateCamera(new Vector3(translation[0], translation[1], translation[2]),
                 quaternion);
+    }
+
+    public double getYaw(){
+        return yaw;
     }
 
 

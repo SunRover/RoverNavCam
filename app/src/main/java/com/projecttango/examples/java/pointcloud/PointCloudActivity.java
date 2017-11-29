@@ -108,11 +108,21 @@ public class PointCloudActivity extends Activity {
 
     //networking
     private Socket socket;
-    private static final int SERVERPORT = 567;
+    private static final int SERVERPORT = 1300;
     //private static final String SERVER_IP = "10.0.2.2";//"localhost";
-    private static final String SERVER_IP = "10.65.175.7"; //desktop
-//    private static final String SERVER_IP = "172.30.94.10"; //rover laptop
+    private static final String DESKTOP_IP = "10.65.175.7"; //desktop
+    private static final String LAPTOP_IP = "172.30.94.10"; //rover laptop
+    private static final String PHONE_IP = "172.30.94.125"; //phone
     //private static final String SERVER_IP = "192.168.1.5"; home laptop
+
+    String command = "STOP";
+    Transciever robotControl;
+    Transciever phoneSocket;
+
+    boolean connectToPhone = true;
+    boolean done = false;
+
+    int counter = 0;
 
     PrintWriter out;
 
@@ -135,9 +145,14 @@ public class PointCloudActivity extends Activity {
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
 
+        robotControl = new Transciever(DESKTOP_IP, SERVERPORT);
+        if(connectToPhone) {
+            phoneSocket = new Transciever(PHONE_IP, 1301);
+        }
+
         Log.d("debug", "starting client thread");
 
-        new Thread(new ClientThread()).start();
+        //new Thread(new ClientThread()).start();
 
         DisplayManager displayManager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
         if (displayManager != null) {
@@ -157,6 +172,11 @@ public class PointCloudActivity extends Activity {
                 public void onDisplayRemoved(int displayId) {
                 }
             }, null);
+        }
+
+        if (!robotControl.isGood()) {
+            System.out.println("Couldn't open port");
+            System.exit(1);
         }
     }
 
@@ -187,6 +207,13 @@ public class PointCloudActivity extends Activity {
                 Log.e(TAG, getString(R.string.exception_tango_error), e);
             }
         }
+    }
+
+    @Override
+    protected void onDestroy(){
+        robotControl.sendMessage("\0");
+        robotControl.close();
+        super.onDestroy();
     }
 
     /**
@@ -259,6 +286,19 @@ public class PointCloudActivity extends Activity {
                 if (mTangoUx != null) {
                     mTangoUx.updatePoseStatus(pose.statusCode);
                 }
+                if(connectToPhone){
+                    if(counter == 0) {
+                        phoneSocket.sendMessage(Double.toString(mRenderer.getYaw()));
+                        Log.d("test", mRenderer.getYaw() + " ");
+                        counter = 10;
+                    }
+                    else{
+                        counter--;
+                    }
+                }
+                else{
+                    Log.d("test", mRenderer.getYaw() + " ");
+                }
             }
 
             @Override
@@ -279,11 +319,14 @@ public class PointCloudActivity extends Activity {
                 final String debugText = getDebugStatus(pointCloud.points, pointCloud.numPoints);
                 if (averageDepth < 0.5) {
                     statusText = "Stop";
+                    command = "STOP";
+                    robotControl.sendMessage(command);
                 } else {
                     statusText = getStatus(pointCloud.points, pointCloud.numPoints);
+                    robotControl.sendMessage(command);
                 }
 
-                out.println(statusText);
+                //out.println(statusText);
 
                 getRawPointData(pointCloud.points, pointCloud.numPoints);
 
@@ -618,10 +661,13 @@ public class PointCloudActivity extends Activity {
             }
         }
         if (totalWeight > 100) {
+            command = "LEFT";
             return "Turn Left";
         } else if (totalWeight < -100) {
+            command = "RIGHT";
             return "Turn Right";
         } else {
+            command = "UP";
             return "Clear";
         }
     }
@@ -631,7 +677,7 @@ public class PointCloudActivity extends Activity {
         for (int i = 0; i < numFloats; i = i + 4) {
             String data = "(";
             data += (pointCloudBuffer.get(i) + " " + pointCloudBuffer.get(i + 1) + " " + pointCloudBuffer.get(i + 2) + ")").toString();
-            Log.d("test", data);
+//            Log.d("test", data);
         }
     }
 
@@ -674,7 +720,7 @@ public class PointCloudActivity extends Activity {
         @Override
         public void run() {
             try {
-                InetAddress serverAddr = InetAddress.getByName(SERVER_IP);
+                InetAddress serverAddr = InetAddress.getByName(DESKTOP_IP);
                 Log.d("debug", "checking for connection");
                 socket = new Socket(serverAddr, SERVERPORT);
                 //socket = new Socket(SERVER_IP, SERVERPORT);
