@@ -112,7 +112,7 @@ public class PointCloudActivity extends Activity {
     //private static final String SERVER_IP = "10.0.2.2";//"localhost";
     private static final String DESKTOP_IP = "10.65.175.7"; //desktop
     private static final String LAPTOP_IP = "172.30.94.10"; //rover laptop
-    private static final String PHONE_IP = "172.30.94.125"; //phone
+    private static final String PHONE_IP = "172.30.68.60"; //phone
     //private static final String SERVER_IP = "192.168.1.5"; home laptop
 
     String command = "STOP";
@@ -122,6 +122,10 @@ public class PointCloudActivity extends Activity {
     boolean connectToPhone = true;
     boolean done = false;
 
+    float[] translation;
+    double yaw;
+    double target_x = -1;
+    double target_y = -1;
     int counter = 0;
 
     PrintWriter out;
@@ -288,8 +292,25 @@ public class PointCloudActivity extends Activity {
                 }
                 if(connectToPhone){
                     if(counter == 0) {
-                        phoneSocket.sendMessage(Double.toString(mRenderer.getYaw()));
-                        Log.d("test", mRenderer.getYaw() + " ");
+                        //send yaw and translation to phone controller
+                        yaw = mRenderer.getYaw();
+                        translation = mRenderer.getTranslation();
+
+                        if(translation != null) {
+                            phoneSocket.sendMessage(Double.toString(yaw));
+                            phoneSocket.sendMessage(Float.toString(mRenderer.getTranslation()[0])); //xcoord
+                            phoneSocket.sendMessage(Float.toString(mRenderer.getTranslation()[2])); //ycoord
+                        }
+
+
+                        //read in target positions
+                        String firstLine = phoneSocket.getMessage();
+                        String secondLine = phoneSocket.getMessage();
+                        if (firstLine != null && secondLine != null) {
+                            target_x = Double.parseDouble(firstLine);
+                            target_y = Double.parseDouble(secondLine);
+                        }
+//                        Log.d("target:", target_x+ " " + target_y);
                         counter = 10;
                     }
                     else{
@@ -297,7 +318,7 @@ public class PointCloudActivity extends Activity {
                     }
                 }
                 else{
-                    Log.d("test", mRenderer.getYaw() + " ");
+                    Log.d("yaw", mRenderer.getYaw() + " ");
                 }
             }
 

@@ -4,6 +4,8 @@ package com.projecttango.examples.java.pointcloud;
  * Transmits and receives messages from Server on SunRover
  */
 
+import android.util.Log;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -62,6 +64,9 @@ public class Transciever extends Thread{
         String line = null;
 
         try {
+            if(!in.ready()){
+                return null;
+            }
             line = in.readLine();
         } catch (IOException e) {
             good = false;
@@ -69,7 +74,10 @@ public class Transciever extends Thread{
         }
 
         if (line == null)
-            good = false;
+            Log.d("tag", "null");
+//            good = false;
+        else
+            Log.d("tag", line + " ");
 
         return line;
     }

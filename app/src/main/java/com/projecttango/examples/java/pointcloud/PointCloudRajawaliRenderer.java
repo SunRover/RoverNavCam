@@ -68,6 +68,8 @@ public class PointCloudRajawaliRenderer extends RajawaliRenderer {
     private Grid mGrid;
 
     double yaw = 0;
+    float[] rotation;
+    float[] translation;
 
     public PointCloudRajawaliRenderer(Context context) {
         super(context);
@@ -215,7 +217,6 @@ public class PointCloudRajawaliRenderer extends RajawaliRenderer {
      * NOTE: This needs to be called from the OpenGL rendering thread.
      */
 
-    float[] rotation;
     public void updateCameraPose(TangoPoseData cameraPose) {
         rotation = cameraPose.getRotationAsFloats();
         // roll (x-axis rotation)
@@ -233,12 +234,13 @@ public class PointCloudRajawaliRenderer extends RajawaliRenderer {
 //        double cosy = +1.0 - 2.0 * (rotation[cameraPose.INDEX_ROTATION_Y] * rotation[cameraPose.INDEX_ROTATION_Y] + rotation[cameraPose.INDEX_ROTATION_Z] * rotation[cameraPose.INDEX_ROTATION_Z]);
 //        double yaw = Math.atan2(siny, cosy);
 //        Log.d(TAG, Math.toDegrees(roll) + " " + Math.toDegrees(pitch) + " " + Math.toDegrees(yaw));
-        float[] translation = cameraPose.getTranslationAsFloats();
+        translation = cameraPose.getTranslationAsFloats();
 //        translation[0] += 0.065;
 //        Log.d(TAG, translation[cameraPose.INDEX_TRANSLATION_X] + " " + translation[cameraPose.INDEX_TRANSLATION_Y] + " " + translation[cameraPose.INDEX_TRANSLATION_Z]);
         Quaternion quaternion = new Quaternion(rotation[3], rotation[0], rotation[1], rotation[2]);
         mFrustumAxes.setPosition(translation[0], translation[1], translation[2]);
 
+        //Log.d("translation", translation[0] + " " + translation[1] + " " + translation[2]);
         yaw = quaternion.getYaw();
 
         // Conjugating the Quaternion is needed because Rajawali uses left-handed convention for
@@ -250,6 +252,10 @@ public class PointCloudRajawaliRenderer extends RajawaliRenderer {
 
     public double getYaw(){
         return yaw;
+    }
+
+    public float[] getTranslation(){
+        return translation;
     }
 
 
