@@ -110,9 +110,10 @@ public class PointCloudActivity extends Activity {
     private Socket socket;
     private static final int SERVERPORT = 1300;
     //private static final String SERVER_IP = "10.0.2.2";//"localhost";
-    private static final String DESKTOP_IP = "10.65.175.7"; //desktop
-    private static final String LAPTOP_IP = "172.30.94.10"; //rover laptop
-    private static final String PHONE_IP = "172.30.68.60"; //phone
+//    private static final String DESKTOP_IP = "10.65.175.7"; //desktop
+    private static final String DESKTOP_IP = "SHS-10L4331FD"; //rover laptop
+    private static final String PHONE_IP = "172.30.68.60"; //my phone
+//    private static final String PHONE_IP = "172.30.84.15"; //nexus
     //private static final String SERVER_IP = "192.168.1.5"; home laptop
 
     String command = "STOP";
@@ -127,6 +128,9 @@ public class PointCloudActivity extends Activity {
     double target_x = -1;
     double target_y = -1;
     int counter = 0;
+    int targetCounter = 0;
+
+    boolean facingTarget = false;
 
     PrintWriter out;
 
@@ -307,9 +311,11 @@ public class PointCloudActivity extends Activity {
                         String firstLine = phoneSocket.getMessage();
                         String secondLine = phoneSocket.getMessage();
                         if (firstLine != null && secondLine != null) {
-                            target_x = Double.parseDouble(firstLine);
-                            target_y = Double.parseDouble(secondLine);
+                            target_x = translation[0] + Double.parseDouble(firstLine); //xcoord
+                            target_y = translation[2] - Double.parseDouble(secondLine); //ycoord
+                            facingTarget = false;
                         }
+
 //                        Log.d("target:", target_x+ " " + target_y);
                         counter = 10;
                     }
@@ -338,12 +344,24 @@ public class PointCloudActivity extends Activity {
 
                 final String statusText;
                 final String debugText = getDebugStatus(pointCloud.points, pointCloud.numPoints);
-                if (averageDepth < 0.5) {
+                if (averageDepth < 0.4) {
                     statusText = "Stop";
                     command = "STOP";
                     robotControl.sendMessage(command);
                 } else {
-                    statusText = getStatus(pointCloud.points, pointCloud.numPoints);
+                    if(facingTarget == false) {
+                        moveToTarget();
+                        statusText = command;
+                    }
+                    else {
+                        statusText = getStatus(pointCloud.points, pointCloud.numPoints);
+                        if(targetCounter > 0){
+                            targetCounter--;
+                        }
+                        else if(targetCounter == 0){
+                            facingTarget = false;
+                        }
+                    }
                     robotControl.sendMessage(command);
                 }
 
@@ -669,25 +687,95 @@ public class PointCloudActivity extends Activity {
         return Float.toString(totalWeight);
     }
 
+    public void moveToTarget(){
+        if(target_x == -1 && target_y == -1){
+            return;
+        }
+        else if (Math.abs(target_x - translation[0]) < 0.5 && Math.abs(target_y - translation[2]) < 0.5){
+            command = "STOP";
+        }
+        else{
+            double diffx = target_x - translation[0];
+            double diffy = target_y - translation[2];
+            double target_angle = yaw;
+            //quadrant 1
+            if(diffx > 0 && diffy > 0) {
+                target_angle = Math.atan(diffx/diffy);
+            }
+            //quadrant 2
+            else if(diffx < 0 && diffy > 0){
+                target_angle = Math.PI*2 + Math.atan(diffx/diffy);
+            }
+            //quadrant 3
+            else if(diffx < 0 && diffy < 0){
+                target_angle = Math.PI + Math.atan(diffx/diffy);
+            }
+            //quadrant 4
+            else if(diffx > 0 && diffy < 0) {
+                target_angle = Math.PI + Math.atan(diffx/diffy);
+            }
+            //convert negative angles to positive
+            double current_angle = yaw;
+            if(current_angle < 0){
+                current_angle *= -1;
+            }
+            else{
+                current_angle = Math.PI*2 - current_angle;
+            }
+            //calculate bearings
+            double leftBearing = Math.PI*2;
+            double rightBearing = Math.PI*2;
+            if(current_angle >= target_angle){
+                leftBearing = current_angle - target_angle;
+                rightBearing = (Math.PI*2) - current_angle + target_angle;
+            }
+            else if(current_angle < target_angle){
+                leftBearing = (Math.PI*2) - target_angle + current_angle;
+                rightBearing = target_angle - current_angle;
+            }
+//            Log.d("angles- ", "current: " + current_angle +"  target: " + target_angle);
+
+            //turn robot
+            if(leftBearing < Math.PI/32 || rightBearing < Math.PI/32) {
+                command = "STOP";
+                facingTarget = true;
+                targetCounter = 25;
+            }
+            else if(leftBearing <= rightBearing){
+                command = "LEFT";
+            }
+            else if(rightBearing < leftBearing){
+                command = "RIGHT";
+            }
+
+        }
+    }
+
     public String getStatus(FloatBuffer pointCloudBuffer, int numPoints) {
         float totalWeight = 0;
         if (numPoints != 0) {
             int numFloats = 4 * numPoints;
             for (int i = 0; i < numFloats; i = i + 4) {
                 if (pointCloudBuffer.get(i) > 0 && pointCloudBuffer.get(i) < 0.3) {
-                    totalWeight += (1 / pointCloudBuffer.get(i + 2));
+                    totalWeight += (1 / pointCloudBuffer.get(i + 2))/2;
                 } else if (pointCloudBuffer.get(i) < 0 && pointCloudBuffer.get(i) > -0.3) {
-                    totalWeight -= (1 / pointCloudBuffer.get(i + 2));
+                    totalWeight -= (1 / pointCloudBuffer.get(i + 2))/2;
                 }
             }
         }
-        if (totalWeight > 100) {
+        Log.d("debug", "diffx: " + Math.abs(target_x - translation[0]) + " diffy: " + Math.abs(target_y - translation[2]));
+        if (Math.abs(target_x - translation[0]) < 0.5 && Math.abs(target_y - translation[2]) < 0.5){
+            command = "STOP";
+            return "Target Reached";
+        }
+        else if (totalWeight > 100) {
             command = "LEFT";
             return "Turn Left";
         } else if (totalWeight < -100) {
             command = "RIGHT";
             return "Turn Right";
-        } else {
+        }
+        else{
             command = "UP";
             return "Clear";
         }
