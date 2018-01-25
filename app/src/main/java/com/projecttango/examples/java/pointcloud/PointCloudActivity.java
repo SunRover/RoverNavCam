@@ -106,13 +106,14 @@ public class PointCloudActivity extends Activity {
     private AtomicBoolean mIsFrameAvailableTangoThread = new AtomicBoolean(false);
     private double mRgbTimestampGlThread;
 
+
     //networking
     private Socket socket;
     private static final int SERVERPORT = 1300;
     //private static final String SERVER_IP = "10.0.2.2";//"localhost";
 //    private static final String DESKTOP_IP = "10.65.175.7"; //desktop
     private static final String DESKTOP_IP = "SHS-10L4331FD"; //rover laptop
-    private static final String PHONE_IP = "172.30.68.60"; //my phone
+    private static final String PHONE_IP = "172.30.92.145"; //my phone
 //    private static final String PHONE_IP = "172.30.84.15"; //nexus
     //private static final String SERVER_IP = "192.168.1.5"; home laptop
 
@@ -312,7 +313,8 @@ public class PointCloudActivity extends Activity {
                         String secondLine = phoneSocket.getMessage();
                         if (firstLine != null && secondLine != null) {
                             target_x = translation[0] + Double.parseDouble(firstLine); //xcoord
-                            target_y = translation[2] - Double.parseDouble(secondLine); //ycoord
+                            target_y = translation[2] + Double.parseDouble(secondLine); //ycoord
+                            Log.d("debug","target recieved");
                             facingTarget = false;
                         }
 
@@ -344,17 +346,20 @@ public class PointCloudActivity extends Activity {
 
                 final String statusText;
                 final String debugText = getDebugStatus(pointCloud.points, pointCloud.numPoints);
-                if (averageDepth < 0.4) {
-                    statusText = "Stop";
+                if (averageDepth < 0.4) { //safety
+                    statusText = "Safety";
                     command = "STOP";
-                    robotControl.sendMessage(command);
                 } else {
-                    if(facingTarget == false) {
+                    if (Math.abs(target_x - translation[0]) < 1 && Math.abs(target_y - translation[2]) < 1){
+                        statusText = "Target Reached";
+                        command = "STOP";
+                    }
+                    else if(facingTarget == false) {
                         moveToTarget();
-                        statusText = command;
+                        statusText = command + Double.toString(Math.abs(target_x - translation[0])) + " " + Double.toString(Math.abs(target_y - translation[2]));
                     }
                     else {
-                        statusText = getStatus(pointCloud.points, pointCloud.numPoints);
+                        statusText = getStatus(pointCloud.points, pointCloud.numPoints) + Double.toString(Math.abs(target_x - translation[0])) + " " + Double.toString(Math.abs(target_y - translation[2]));
                         if(targetCounter > 0){
                             targetCounter--;
                         }
@@ -362,8 +367,8 @@ public class PointCloudActivity extends Activity {
                             facingTarget = false;
                         }
                     }
-                    robotControl.sendMessage(command);
                 }
+                robotControl.sendMessage(command);
 
                 //out.println(statusText);
 
@@ -691,12 +696,9 @@ public class PointCloudActivity extends Activity {
         if(target_x == -1 && target_y == -1){
             return;
         }
-        else if (Math.abs(target_x - translation[0]) < 0.5 && Math.abs(target_y - translation[2]) < 0.5){
-            command = "STOP";
-        }
         else{
             double diffx = target_x - translation[0];
-            double diffy = target_y - translation[2];
+            double diffy = translation[2] - target_y;
             double target_angle = yaw;
             //quadrant 1
             if(diffx > 0 && diffy > 0) {
@@ -757,18 +759,14 @@ public class PointCloudActivity extends Activity {
             int numFloats = 4 * numPoints;
             for (int i = 0; i < numFloats; i = i + 4) {
                 if (pointCloudBuffer.get(i) > 0 && pointCloudBuffer.get(i) < 0.3) {
-                    totalWeight += (1 / pointCloudBuffer.get(i + 2))/2;
+                    totalWeight += (1 / pointCloudBuffer.get(i + 2))/3;
                 } else if (pointCloudBuffer.get(i) < 0 && pointCloudBuffer.get(i) > -0.3) {
-                    totalWeight -= (1 / pointCloudBuffer.get(i + 2))/2;
+                    totalWeight -= (1 / pointCloudBuffer.get(i + 2))/3;
                 }
             }
         }
         Log.d("debug", "diffx: " + Math.abs(target_x - translation[0]) + " diffy: " + Math.abs(target_y - translation[2]));
-        if (Math.abs(target_x - translation[0]) < 0.5 && Math.abs(target_y - translation[2]) < 0.5){
-            command = "STOP";
-            return "Target Reached";
-        }
-        else if (totalWeight > 100) {
+        if (totalWeight > 100) {
             command = "LEFT";
             return "Turn Left";
         } else if (totalWeight < -100) {
