@@ -112,6 +112,7 @@ public class PointCloudActivity extends Activity {
     private static final int SERVERPORT = 1300;
     //private static final String SERVER_IP = "10.0.2.2";//"localhost";
 //    private static final String DESKTOP_IP = "10.65.175.7"; //desktop
+//    private static final String DESKTOP_IP = "SHS-10DD3C387"; //desktop 2
     private static final String DESKTOP_IP = "SHS-10L4331FD"; //rover laptop
     private static final String PHONE_IP = "172.30.92.145"; //my phone
 //    private static final String PHONE_IP = "172.30.84.15"; //nexus
@@ -122,6 +123,7 @@ public class PointCloudActivity extends Activity {
     Transciever phoneSocket;
 
     boolean connectToPhone = true;
+    int controllerType = 1;
     boolean done = false;
 
     float[] translation;
@@ -161,7 +163,7 @@ public class PointCloudActivity extends Activity {
 
         Log.d("debug", "starting client thread");
 
-        //new Thread(new ClientThread()).start();
+        new Thread(new ClientThread()).start();
 
         DisplayManager displayManager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
         if (displayManager != null) {
@@ -302,23 +304,33 @@ public class PointCloudActivity extends Activity {
                         translation = mRenderer.getTranslation();
 
                         if(translation != null) {
-                            phoneSocket.sendMessage(Double.toString(yaw));
-                            phoneSocket.sendMessage(Float.toString(mRenderer.getTranslation()[0])); //xcoord
-                            phoneSocket.sendMessage(Float.toString(mRenderer.getTranslation()[2])); //ycoord
+                            if(controllerType == 1) {
+                                phoneSocket.sendMessage(Double.toString(yaw));
+                                phoneSocket.sendMessage(Float.toString(mRenderer.getTranslation()[0])); //xcoord
+                                phoneSocket.sendMessage(Float.toString(mRenderer.getTranslation()[2])); //ycoord
+                            }
                         }
 
 
                         //read in target positions
                         String firstLine = phoneSocket.getMessage();
                         String secondLine = phoneSocket.getMessage();
+                        Log.d("debug", firstLine + " " + secondLine);
                         if (firstLine != null && secondLine != null) {
-                            target_x = translation[0] + Double.parseDouble(firstLine); //xcoord
-                            target_y = translation[2] + Double.parseDouble(secondLine); //ycoord
+                            if(controllerType == 1) {
+                                target_x = translation[0] + Double.parseDouble(firstLine); //xcoord
+                                target_y = translation[2] + Double.parseDouble(secondLine); //ycoord
+                            }
+                            else if(controllerType == 2){
+                                target_x = Double.parseDouble(firstLine); //xcoord
+                                target_y = Double.parseDouble(secondLine); //ycoord
+
+                            }
                             Log.d("debug","target recieved");
                             facingTarget = false;
                         }
 
-//                        Log.d("target:", target_x+ " " + target_y);
+                        Log.d("target:", target_x+ " " + target_y);
                         counter = 10;
                     }
                     else{
@@ -353,6 +365,10 @@ public class PointCloudActivity extends Activity {
                     if (Math.abs(target_x - translation[0]) < 1 && Math.abs(target_y - translation[2]) < 1){
                         statusText = "Target Reached";
                         command = "STOP";
+                        out.println("Target Reached");
+                        if(controllerType == 2) {
+                            phoneSocket.sendMessage("Target Reached");
+                        }
                     }
                     else if(facingTarget == false) {
                         moveToTarget();
@@ -693,7 +709,7 @@ public class PointCloudActivity extends Activity {
     }
 
     public void moveToTarget(){
-        if(target_x == -1 && target_y == -1){
+        if(target_x == Integer.MIN_VALUE && target_y == Integer.MIN_VALUE){
             return;
         }
         else{

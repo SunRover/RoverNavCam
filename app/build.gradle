@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 23
+    compileSdkVersion 25
     buildToolsVersion '25.0.0'
 
     defaultConfig {
@@ -25,7 +25,7 @@ android {
 
 
 dependencies {
-    apply from: '../../version.gradle'
+    apply from: '../version.gradle'
     compile "com.google.tango:sdk-base:${release_version}"
     compile "com.google.tango:sdk-support:${release_version}"
     compile "com.google.tango:sdk-ux:${release_version}"
